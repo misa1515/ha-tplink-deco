@@ -22,21 +22,29 @@ from homeassistant.const import ATTR_DEVICE_ID
 from homeassistant.const import CONF_HOST
 from homeassistant.const import CONF_PASSWORD
 from homeassistant.const import CONF_USERNAME
-from homeassistant.core import Config
 from homeassistant.core import HomeAssistant
 from homeassistant.core import ServiceCall
 from homeassistant.helpers import device_registry
 from homeassistant.helpers import entity_registry
+from homeassistant.helpers import restore_state
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.restore_state import RestoreStateData
 
 from .api import TplinkDecoApi
 from .const import ATTR_DEVICE_TYPE
-from .const import CONFIG_VERIFY_SSL
+from .const import CONF_CLIENT_POSTFIX
+from .const import CONF_CLIENT_PREFIX
+from .const import CONF_DECO_POSTFIX
+from .const import CONF_DECO_PREFIX
+from .const import CONF_TIMEOUT_ERROR_RETRIES
+from .const import CONF_TIMEOUT_SECONDS
+from .const import CONF_VERIFY_SSL
 from .const import COORDINATOR_CLIENTS_KEY
 from .const import COORDINATOR_DECOS_KEY
 from .const import DEFAULT_CONSIDER_HOME
+from .const import DEFAULT_DECO_POSTFIX
 from .const import DEFAULT_SCAN_INTERVAL
+from .const import DEFAULT_TIMEOUT_ERROR_RETRIES
+from .const import DEFAULT_TIMEOUT_SECONDS
 from .const import DEVICE_TYPE_DECO
 from .const import DOMAIN
 from .const import PLATFORMS
@@ -47,7 +55,7 @@ from .coordinator import TplinkDecoClientUpdateCoordinator
 from .coordinator import TpLinkDecoData
 from .coordinator import TplinkDecoUpdateCoordinator
 
-_LOGGER: logging.Logger = logging.getLogger(__package__)
+_LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
 async def async_create_and_refresh_coordinators(
@@ -55,16 +63,26 @@ async def async_create_and_refresh_coordinators(
     config_data: dict[str:Any],
     consider_home_seconds,
     update_interval: timedelta = None,
-    deco_data: TpLinkDecoData = TpLinkDecoData(),
-    client_data: dict[str:TpLinkDecoClient] = {},
+    deco_data: TpLinkDecoData = None,
+    client_data: dict[str:TpLinkDecoClient] = None,
 ):
     host = config_data.get(CONF_HOST)
     username = config_data.get(CONF_USERNAME)
     password = config_data.get(CONF_PASSWORD)
-    verify_ssl = config_data.get(CONFIG_VERIFY_SSL)
+    timeout_error_retries = config_data.get(CONF_TIMEOUT_ERROR_RETRIES)
+    timeout_seconds = config_data.get(CONF_TIMEOUT_SECONDS)
+    verify_ssl = config_data.get(CONF_VERIFY_SSL)
     session = async_get_clientsession(hass)
 
-    api = TplinkDecoApi(host, username, password, verify_ssl, session)
+    api = TplinkDecoApi(
+        session,
+        host,
+        username,
+        password,
+        verify_ssl,
+        timeout_error_retries,
+        timeout_seconds,
+    )
     deco_coordinator = TplinkDecoUpdateCoordinator(
         hass, api, update_interval, deco_data
     )
@@ -104,7 +122,7 @@ async def async_create_config_data(hass: HomeAssistant, config_entry: ConfigEntr
 
     # Populate client list with existing entries so that we keep track of disconnected clients
     # since deco list_clients only returns connected clients.
-    last_states = (await RestoreStateData.async_get_instance(hass)).last_states
+    last_states = restore_state.async_get(hass).last_states
     for entry in existing_entries:
         if entry.domain != DEVICE_TRACKER_DOMAIN:
             continue
@@ -131,11 +149,6 @@ async def async_create_config_data(hass: HomeAssistant, config_entry: ConfigEntr
         deco_data,
         client_data,
     )
-
-
-async def async_setup(hass: HomeAssistant, config: Config):
-    """Set up this integration using YAML is not supported."""
-    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry):
@@ -238,14 +251,28 @@ async def async_migrate_entry(hass, config_entry: ConfigEntry):
     """Migrate old entry."""
     _LOGGER.debug("Migrating from version %s", config_entry.version)
 
+    new = {**config_entry.data}
+
     if config_entry.version == 1:
-
-        new = {**config_entry.data}
-        # TODO: modify Config Entry data
-
         config_entry.version = 2
-        new[CONFIG_VERIFY_SSL] = True
-        hass.config_entries.async_update_entry(config_entry, data=new)
+        new[CONF_VERIFY_SSL] = True
+
+    if config_entry.version == 2:
+        config_entry.version = 3
+        new[CONF_TIMEOUT_ERROR_RETRIES] = DEFAULT_TIMEOUT_ERROR_RETRIES
+
+    if config_entry.version == 3:
+        config_entry.version = 4
+        new[CONF_TIMEOUT_SECONDS] = DEFAULT_TIMEOUT_SECONDS
+
+    if config_entry.version == 4:
+        config_entry.version = 5
+        new[CONF_CLIENT_PREFIX] = ""
+        new[CONF_CLIENT_POSTFIX] = ""
+        new[CONF_DECO_PREFIX] = ""
+        new[CONF_DECO_POSTFIX] = DEFAULT_DECO_POSTFIX
+
+    hass.config_entries.async_update_entry(config_entry, data=new)
 
     _LOGGER.info("Migration to version %s successful", config_entry.version)
 

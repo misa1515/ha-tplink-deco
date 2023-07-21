@@ -1,5 +1,4 @@
 """Adds config flow for TP-Link Deco."""
-import asyncio
 import logging
 from typing import Any
 
@@ -9,19 +8,31 @@ from homeassistant.components.device_tracker.const import CONF_CONSIDER_HOME
 from homeassistant.components.device_tracker.const import CONF_SCAN_INTERVAL
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST
-from homeassistant.const import CONF_PASSWORD
+from homeassistant.const import (
+    CONF_PASSWORD,
+)
 from homeassistant.const import CONF_USERNAME
 from homeassistant.core import callback
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 
 from .__init__ import async_create_and_refresh_coordinators
-from .const import CONFIG_VERIFY_SSL
+from .const import CONF_CLIENT_POSTFIX
+from .const import CONF_CLIENT_PREFIX
+from .const import CONF_DECO_POSTFIX
+from .const import CONF_DECO_PREFIX
+from .const import CONF_TIMEOUT_ERROR_RETRIES
+from .const import CONF_TIMEOUT_SECONDS
+from .const import CONF_VERIFY_SSL
 from .const import DEFAULT_CONSIDER_HOME
+from .const import DEFAULT_DECO_POSTFIX
 from .const import DEFAULT_SCAN_INTERVAL
+from .const import DEFAULT_TIMEOUT_ERROR_RETRIES
+from .const import DEFAULT_TIMEOUT_SECONDS
 from .const import DOMAIN
+from .exceptions import TimeoutException
 
-_LOGGER: logging.Logger = logging.getLogger(__package__)
+_LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
 def _get_auth_schema(data: dict[str:Any]):
@@ -37,24 +48,65 @@ def _get_schema(data: dict[str:Any]):
     if data is None:
         data = {}
     schema = _get_auth_schema(data)
+    scan_interval = data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
     schema.update(
         {
             vol.Required(CONF_HOST, default=data.get(CONF_HOST, "192.168.0.1")): str,
             vol.Required(
                 CONF_SCAN_INTERVAL,
-                default=data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
+                default=scan_interval,
             ): vol.All(vol.Coerce(int), vol.Range(min=1)),
             vol.Required(
                 CONF_CONSIDER_HOME,
                 default=data.get(CONF_CONSIDER_HOME, DEFAULT_CONSIDER_HOME),
             ): vol.All(vol.Coerce(int), vol.Range(min=0)),
             vol.Required(
-                CONFIG_VERIFY_SSL,
-                default=data.get(CONFIG_VERIFY_SSL, True),
+                CONF_TIMEOUT_ERROR_RETRIES,
+                default=data.get(
+                    CONF_TIMEOUT_ERROR_RETRIES, DEFAULT_TIMEOUT_ERROR_RETRIES
+                ),
+            ): vol.All(vol.Coerce(int), vol.Range(min=0)),
+            vol.Required(
+                CONF_TIMEOUT_SECONDS,
+                default=data.get(CONF_TIMEOUT_SECONDS, DEFAULT_TIMEOUT_SECONDS),
+            ): vol.All(vol.Coerce(int), vol.Range(min=5)),
+            vol.Required(
+                CONF_VERIFY_SSL,
+                default=data.get(CONF_VERIFY_SSL, True),
             ): bool,
+            vol.Optional(
+                CONF_CLIENT_PREFIX,
+                description={"suggested_value": data.get(CONF_CLIENT_PREFIX, "")},
+            ): str,
+            vol.Optional(
+                CONF_CLIENT_POSTFIX,
+                description={"suggested_value": data.get(CONF_CLIENT_POSTFIX, "")},
+            ): str,
+            vol.Optional(
+                CONF_DECO_PREFIX,
+                description={"suggested_value": data.get(CONF_DECO_PREFIX, "")},
+            ): str,
+            vol.Optional(
+                CONF_DECO_POSTFIX,
+                description={
+                    "suggested_value": data.get(CONF_DECO_POSTFIX, DEFAULT_DECO_POSTFIX)
+                },
+            ): str,
         }
     )
     return schema
+
+
+# We need to make sure the optional keys are set so that they get updated in update_listener async_update_entry() call
+def _ensure_user_input_optionals(data: dict[str:Any]) -> None:
+    for key in [
+        CONF_CLIENT_PREFIX,
+        CONF_CLIENT_POSTFIX,
+        CONF_DECO_PREFIX,
+        CONF_DECO_POSTFIX,
+    ]:
+        if key not in data:
+            data[key] = ""
 
 
 async def _async_test_credentials(hass: HomeAssistant, data: dict[str:Any]):
@@ -62,12 +114,12 @@ async def _async_test_credentials(hass: HomeAssistant, data: dict[str:Any]):
     try:
         await async_create_and_refresh_coordinators(hass, data, consider_home_seconds=1)
         return {}
-    except asyncio.TimeoutError:
+    except TimeoutException:
         return {"base": "timeout_connect"}
     except ConfigEntryAuthFailed as err:
         _LOGGER.warning("Error authenticating credentials: %s", err)
         return {"base": "invalid_auth"}
-    except Exception as err:  # pylint: disable=broad-except
+    except Exception as err:
         _LOGGER.warning("Error testing credentials: %s", err)
         return {"base": "unknown"}
 
@@ -75,7 +127,7 @@ async def _async_test_credentials(hass: HomeAssistant, data: dict[str:Any]):
 class TplinkDecoFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     """Config flow for tplink_deco."""
 
-    VERSION = 2
+    VERSION = 5
     CONNECTION_CLASS = config_entries.CONN_CLASS_CLOUD_POLL
     reauth_entry: ConfigEntry = None
 
@@ -90,6 +142,7 @@ class TplinkDecoFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             self._errors = await _async_test_credentials(self.hass, user_input)
             if len(self._errors) == 0:
+                _ensure_user_input_optionals(user_input)
                 return self.async_create_entry(
                     title=user_input[CONF_HOST], data=user_input
                 )
@@ -112,8 +165,10 @@ class TplinkDecoFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         self._errors = {}
 
         if user_input is not None:
+            _ensure_user_input_optionals(user_input)
             data = dict(self.reauth_entry.data)
             data.update(user_input)
+
             self._errors = await _async_test_credentials(self.hass, data)
             if len(self._errors) == 0:
                 self.hass.config_entries.async_update_entry(
@@ -147,6 +202,7 @@ class TplinkDecoOptionsFlowHandler(config_entries.OptionsFlow):
         self._errors = {}
 
         if user_input is not None:
+            _ensure_user_input_optionals(user_input)
             self.data.update(user_input)
 
             self._errors = await _async_test_credentials(self.hass, self.data)

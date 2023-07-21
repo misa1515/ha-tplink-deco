@@ -53,6 +53,10 @@ Device trackers are added for both decos and clients. The device tracker state m
 | bssid_band5     | A1:B2:C3:D4:E5:F6                |
 | signal_band2_4  | 3                                |
 | signal_band2_4  | 4                                |
+| deco_device     | living_room                      |
+| deco_mac        | 1A-B2-C3-4D-56-EF                |
+
+Note: `deco_device` and `deco_mac` will only be set for non-master decos.
 
 ### Devices
 
@@ -78,15 +82,7 @@ target:
 
 ### HACS
 
-1. Install [HACS](https://hacs.xyz/)
-2. Go to HACS "Integrations >" section
-3. In the lower right click "+ Explore & Download repositories"
-4. Search for "TP-Link Deco" and add it
-   - HA Restart is not needed since it is configured in UI config flow
-5. In the Home Assistant (HA) UI go to "Configuration"
-6. Click "Integrations"
-7. Click "+ Add Integration"
-8. Search for "TP-Link Deco"
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=amosyuen&repository=ha-tplink-deco&category=integration)
 
 ### Manual
 
@@ -96,16 +92,14 @@ target:
 4. Download _all_ the files from the `custom_components/tplink_deco/` directory (folder) in this repository.
 5. Place the files you downloaded in the new directory (folder) you created.
 6. Restart Home Assistant
-7. In the Home Assistant (HA) UI go to "Configuration"
-8. Click "Integrations"
-9. Click "+ Add Integration"
-10. Search for "TP-Link Deco"
 
 {% endif %}
 
 ## Configuration (Important! Please Read)
 
 Config is done in the HA integrations UI.
+
+[![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=tplink_deco)
 
 ### Host
 
@@ -117,11 +111,46 @@ The login credentials **MUST** be the deco **owner** credentials and the usernam
 
 Also whenever the owner logs in, all other sessions for the owner will be logged out. So if you log in with the owner credentials in the mobile app, it will cause the integration to be logged out, sometimes resulting in 403 errors. Since the integration has built in retry on auth errors, the integration will re-login, but that will logout your mobile app login session.
 
-Recommend that you create a separate manager account with full permissions to manage the router manually in the mobile app and use the owner credentials only for this integration. If you need to use the owner account to do some manual management, recommend disabling this integration temporarily.
+Recommend that you create a separate manager account with full permissions to manage the router manually in the mobile app and use the owner credentials only for this integration. If you need to use the owner account to do some manual management, recommend disabling this integration temporarily. Steps to create a manager account:
+
+1. Log out of the deco app
+2. Sign up for a new account with a different email address
+3. Log out of the deco app
+4. Login to original admin account
+5. Go to the "More" section and look for "Managers"
+6. Add the email address of the new account
+7. Log out of the app
+8. Login using the new manager account you've just created
+
+### Timeout Secounds
+
+How many seconds to wait until request times out. You can increase this if you get a lot of timeout errors from your router.
+
+Note: The router also has its own timeout so increasing this may not help.
+
+### Timeout Error Retry Count
+
+How many times to retry timeout errors for one request. You can increase this if you get a lot of timeout errors from your router.
 
 ### Verify SSL Certificate
 
 Turn off this config option if your browser gives you a warning that the SSL certificate is self-signed when you visit the router host IP in your browser.
+
+### Client Name Prefix
+
+Prefix to prepend to client name. Example: Value of "Client" for "Laptop" client will result in "Client Laptop".
+
+### Client Name Postfix
+
+Postfix to append to client name. Example: Value of "Client" for "Laptop" client will result in "Laptop Client".
+
+### Deco Name Prefix
+
+Prefix to prepend to deco name. Example: Value of "Deco" for "Living Room" deco will result in "Deco Living Room".
+
+### Deco Name Postfix
+
+Postfix to append to deco name. Example: Value of "Deco" for "Living Room" deco will result in "Living Room Deco".
 
 ### Disable new entities
 
@@ -133,7 +162,7 @@ If you prefer new entities to be disabled by default:
 4. Click "System options"
 5. Disable "Enable newly added entities"
 
-### Notify on new entities
+## Notify on new entities
 
 You can get notified by new entities by listening to the `entity_registry_updated` event. Here's an example automation:
 
@@ -196,16 +225,33 @@ message: "device_tracker.amos_phone_wifi connected to main 5G through Guest Room
 - Deco X50
 - Deco X60
 - Deco X68
+- Deco X73-DSL(1.0)
+- Deco XE75
 - Deco X90
+- Mercusys Halo H70X
 - Mercusys Halo H80X
 
 ## Not Working Devices
 
 - Deco S7 (1.3.0 Build 20220609 Rel. 64814)
 
+## Known Issues
+
+### Timeout Error
+
+Some routers give a lot of timeout errors like `Timeout fetching tplink_deco`, which cause the devices to be unavailable. This is a problem with the router. Potential mitigations:
+
+- Rebooting the router
+- Increasing [timeout seconds](#timeout-seconds) in integration config
+- Increasing [timeout error retry count](#timeout-error-retry-count) in integration config
+
+### Extra Devices
+
+You may see extra devices show up under the Tp-Link deco integration as per https://github.com/amosyuen/ha-tplink-deco/issues/73. This is expected because the entities use macs for their unique ID. If there is another integration that exposes the same device using their mac, Home Assistant will combine the info from devices that have the same unique ID. This is working as intended since they represent the same device.
+
 ## Contributions are welcome!
 
-If you want to contribute to this please read the [Contribution guidelines](https://github.com/amosyuen/ha-tplink-deco/blob/master/CONTRIBUTING.md)
+If you want to contribute to this please read the [Contribution guidelines](https://github.com/amosyuen/ha-tplink-deco/blob/main/CONTRIBUTING.md)
 
 ## Credits
 
