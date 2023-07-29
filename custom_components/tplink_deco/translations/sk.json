@@ -9,7 +9,13 @@
           "password": "Heslo",
           "interval_seconds": "Sekúnd medzi aktualizáciami",
           "consider_home": "Sekundy čakania, kým sa sledovač zariadenia označí ako neprítomný po tom, čo ho nikto nevidel.",
+          "timeout_seconds": "Timeout sekundy",
+          "timeout_error_retries": "Počet opakovaných pokusov o chybný časový limit",
           "verify_ssl": "Skontrolujte, či je certifikát SSL platný"
+          "client_prefix": "Predpona mena klienta",
+          "client_postfix": "Postfix mena klienta",
+          "deco_prefix": "Predpona názvu Deco",
+          "deco_postfix": "Deco názov postfix"
         }
       },
       "reauth_confirm": {
@@ -39,7 +45,13 @@
           "password": "Heslo",
           "interval_seconds": "Sekúnd medzi aktualizáciami",
           "consider_home": "Sekundy čakania, kým sa sledovač zariadenia označí ako neprítomný po tom, čo ho nikto nevidel.",
+          "timeout_seconds": "Timeout sekundy",
+          "timeout_error_retries": "Počet opakovaných pokusov o chybný časový limit",
           "verify_ssl": "Skontrolujte, či je certifikát SSL platný"
+          "client_prefix": "Predpona mena klienta",
+          "client_postfix": "Postfix mena klienta",
+          "deco_prefix": "Predpona názvu Deco",
+          "deco_postfix": "Deco názov postfix"
         }
       }
     },
